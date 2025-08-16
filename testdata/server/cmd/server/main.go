@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/demula/mono/core"
-	"github.com/demula/mono/example/api"
+	"github.com/demula/mono-example/api"
+	"github.com/demula/mono-example/core"
 )
 
 func sayIt(w http.ResponseWriter, r *http.Request) {

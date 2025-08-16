@@ -3,7 +3,7 @@ package core
 import (
 	"fmt"
 
-	"github.com/demula/mono/example/api"
+	"github.com/demula/mono-example/api"
 )
 
 func Say(it api.Hello) string {

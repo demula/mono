@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/demula/mono/core"
+	"github.com/demula/mono-example/core"
 )
 
 func main() {
