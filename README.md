@@ -1,8 +1,21 @@
-# mono
+<!-- markdownlint-disable-next-line first-line-h1 no-inline-html -->
+<div align="center"><img src="logo.png" alt="Monkeys venerates monolith"/></div>
+
+<!-- markdownlint-disable-next-line no-inline-html -->
+# <div align="center">Mono - Go monorepo missing tool</div>
 
 Update all `go.mod` and `go.sum` files of a mono-repo to the given tagged release.
+<!-- markdownlint-disable-next-line no-inline-html line-length -->
+## <div align="center"> [![Go Report Card](https://goreportcard.com/badge/github.com/demula/mono)](https://goreportcard.com/report/github.com/demula/mono) [![codecov](https://codecov.io/gh/demula/mono/branch/main/graph/badge.svg)](https://codecov.io/gh/demula/mono) </div>
 
 ## Installation
+
+### Pre-built binary
+
+Grab your pre-built binary from the
+[Releases](https://github.com/demula/mono/releases) page.
+
+### From source
 
 As a command in `PATH`:
 
