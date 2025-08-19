@@ -44,6 +44,25 @@ func usage(fs *flag.FlagSet, msg string) func() {
 	}
 }
 
+func version(isDebug bool, fs *flag.FlagSet, args []string) func() error {
+	return func() error {
+		debug(isDebug, fs, args)
+		msg := fmt.Sprintf("%s %s %s %s",
+			Version,
+			BuildDate,
+			GitHash,
+			GitTreeState,
+		)
+		_, err := fmt.Fprint(fs.Output(), msg)
+		if err != nil {
+			slog.Error("could not use given output for printing version",
+				slog.String("error", err.Error()),
+			)
+		}
+		return nil
+	}
+}
+
 func parse(baseFS *flag.FlagSet, arguments []string) *Command {
 	cmd := &Command{
 		Name:  "base",
@@ -54,6 +73,7 @@ func parse(baseFS *flag.FlagSet, arguments []string) *Command {
 
 	isDebug := baseFS.Bool("debug", false, "print debug messages")
 	getHelp := baseFS.Bool("help", false, "print help information")
+	getVersion := baseFS.Bool("version", false, "print version and build information")
 
 	defaultDir, err := os.Getwd()
 	if err != nil {
@@ -79,6 +99,10 @@ func parse(baseFS *flag.FlagSet, arguments []string) *Command {
 	}
 	if len(args) == 0 {
 		if *getHelp {
+			return cmd
+		}
+		if *getVersion {
+			cmd.Run = version(*isDebug, baseFS, args)
 			return cmd
 		}
 		cmd.Error = fmt.Errorf("%w. missing subcommand", ErrInput)
@@ -137,6 +161,9 @@ func parse(baseFS *flag.FlagSet, arguments []string) *Command {
 		if len(args) == 0 {
 			if *getHelp {
 				return cmd
+			}
+			if *getVersion {
+				cmd.Run = version(*isDebug, baseFS, args)
 			}
 			cmd.Error = fmt.Errorf("%w. missing version argument", ErrInput)
 			return cmd
