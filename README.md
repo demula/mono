@@ -1,14 +1,66 @@
 # mono
 
-Update all go.mod and go.sum files of a mono-repo to the given tagged release.
+Update all `go.mod` and `go.sum` files of a mono-repo to the given tagged release.
+
+## Installation
+
+As a command in `PATH`:
+
+```bash
+go install "github.com/demula/mono@latest"
+```
+
+or as a tool in the project (not recommended, dependencies mixed with your
+project):
+
+```bash
+go get -tool "github.com/demula/mono@latest"
+```
 
 ## Usage
 
 On the same directory you have `go.work`:
 
 ```bash
-mono release "v0.1.0-alpha.1"
+mono release --only-go-mod-sum "v0.1.0-alpha.1"
 ```
+
+The flag `--only-go-mod-sum` is required as we want to leave room for this tool
+to become a simplified version of
+[Cocogitto](https://github.com/cocogitto/cocogitto) or
+[goreleaser](https://github.com/goreleaser/goreleaser) without being
+incompatible with existing users.
+
+> [!IMPORTANT] Do not run this command while running any other go command. It
+> does not lock the files used and it is meant to only be run after all
+> modifications (go mod tidy and others) are done.
+
+### Example
+
+There is an example repository that you can use for testing the functionality
+out: [mono-example](https://github.com/demula/mono-example)
+
+```bash
+git clone httts://github.com/demula/mono-example
+cd mono-example
+make init # Install mono globally
+make example-release # Creates a new RC version that can be committed and tagged.
+```
+
+That repository shows how to use the `mono` command to prepare for a release.
+`mono` at the moment does not commit or tag the repository for you.
+
+> [!NOTE] Do not go too crazy creating tags and asking `go` to download them. The
+> Go package repository does **NOT** delete anything (even if you repo is
+> private).
+
+## Pricing
+
+If you use this project inside a successful company I do expect some
+compensation. Yes, it is hard to go through approval workflows in a corporation
+and yes, it is Apache 2 licensed but open source as we know it can only survive
+if there is some kind of compensation for the people behind it. It is hard to
+justify putting aside free time to do maintenance if there is little incentive.
 
 ## Why
 
@@ -52,7 +104,7 @@ This tool is for the later.
 On this approach you need to carefully modify and update the `go.mod`s and the
 `go.sum`s in the same commit so it can be tagged all at once.
 
-> ![NOTE]: The interdependencies should have already pre-aligned with
+> [!NOTE] The interdependencies should have already pre-aligned with
 > `go work sync` to avoid surprises.
 
 First step is to set `core` module dependency to `api` to the new version
@@ -78,7 +130,7 @@ anything that we need to change when tagging.
 ## Why not just commit go.work
 
 Personally I wished for more guidance from the go dev team on this topic when
-they create the workspaces feature. That said, these are my reasons:
+they created the workspaces feature. That said, these are my reasons:
 
 - Broken importing behaviour for external modules. Any module outside the
 workspace using the modules in the workspace will not benefit from the
@@ -89,3 +141,19 @@ outside outputs 'B'.
 - Convention. Other go devs expect the usage and behaviour marked in the
 community guidelines when workspaces were released explicitly calling to
 **NOT** commit the file in question.
+
+## Shortcomings
+
+While this command works great for creating a release, it does not help on the
+everyday development. Keep in mind that when doing changes across different
+modules you will need to commit the changes in order to still get a consistent
+repository. Maybe in the future we can expand this command to help on this use
+case where we can check if there are uncommitted changes or outdated
+interdependencies when working with `go.work` as pre-commit check (and maybe a
+`--fix` option when possible).
+
+## Attributions
+
+The file `gosum/gosum.go` is a modified version of the golang source code of
+[`go/src/cmd/go/internal/modfetch`](https://cs.opensource.google/go/go/+/refs/tags/go1.25.0:src/cmd/go/internal/modfetch/fetch.go;drc=07a279794dff7ef3371710f1de4b3f9fc4ef4987)
+created by The Go Authors.

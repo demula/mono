@@ -1,3 +1,12 @@
+// Copyright 2018 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+//
+// This file includes modifications by Jesus de Mula
+// Cano, originally from The Go Authors on
+// https://go.googlesource.com/go under a BSD-style
+// license.
+
 package gosum
 
 import (
