@@ -10,9 +10,13 @@ on:
       - main
       - "releases/**"
 
+permissions: {}
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    permissions:
+      actions: read # for detecting the Github Actions environment.
     steps:
       - uses: actions/checkout@8410ad0602e1e429cee44a835ae9f77f654a6694 # v4.0.0
         with:
@@ -82,9 +86,10 @@ jobs:
           name: sarif-${{ github.run_id }}
           path: |
             ${{ steps.scan.outputs.sarif }}
-
   snapshots:
     runs-on: ubuntu-latest
+    permissions:
+      actions: read # for detecting the Github Actions environment.
     strategy:
       matrix:
         goos: [linux, darwin]
@@ -146,3 +151,4 @@ jobs:
           name: ${{ steps.build.outputs.artifact_name }}
           path: ./.dist/${{ steps.build.outputs.artifact_name }}
           if-no-files-found: error
+

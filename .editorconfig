@@ -1,0 +1,30 @@
+# top-most EditorConfig file
+root = true
+
+# Unix-style newlines with a newline ending every file
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# Tab indentation (no size specified)
+[Makefile]
+indent_style = tab
+indent_size = 4
+
+# Bash scripts
+[scripts/*]
+## --language-variant
+shell_variant      = bash
+binary_next_line   = true
+## --case-indent
+switch_case_indent = true
+
+# Documentation
+[*.md]
+trim_trailing_whitespace = false
+eclint_indent_style = unset
+

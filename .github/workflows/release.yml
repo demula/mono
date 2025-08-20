@@ -1,0 +1,87 @@
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: |
+          Don't commit or publish any changes
+        required: false
+        type: boolean
+        default: true
+
+permissions: {}
+
+jobs:
+  release:
+    permissions:
+      contents: write # used for uploading assets and commit release version
+      id-token: write # Enable OIDC to sign the commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8410ad0602e1e429cee44a835ae9f77f654a6694 # v4.0.0
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - uses: chainguard-dev/actions/setup-gitsign@0cda751b114eb55c388e88f7479292668165602a # v1.0.2
+      - name: Check if running on main
+        if: github.ref != 'refs/heads/main'
+        # we are using the following flag when running `cosign blob-verify` for checksum signature verification:
+        #   --certificate-identity-regexp "https://github.com/demula/mono/.github/workflows/release.yaml@refs/heads/main"
+        # if we are not on the main branch, the signature will not be verifiable since the suffix requires the main branch
+        # at the time of when the OIDC token was issued on the Github Actions runner.
+        run: |
+          echo "Release can only be run on the 'main' branch and not on '${{ github.ref_name }}'" >> $GITHUB_STEP_SUMMARY
+          echo "This can only be run on the main branch otherwise releases produced will not be verifiable with cosign" &&
+          exit 1
+      - run: |
+          cp VERSION VERSION.old
+      - name: Create release commit
+        id: release
+        uses: cocogitto/cocogitto-action@c7a74f5406bab86da17da0f0e460a69f8219a68c # v3.11.0
+        with:
+          release: true
+          # From gitsign setup in https://github.com/chainguard-dev/actions/blob/be7b31a01af8ce7228fe901326f1d223fb788e14/setup-gitsign/action.yml#L103
+          # Use workflow name as the username
+          git-user: "${{ github.workflow }}"
+          # This email identifies the commit as GitHub Actions - see https://github.com/orgs/community/discussions/26560
+          git-user-email: "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Check if there are releasable changes
+        id: check
+        run: |
+          set +e
+          diff VERSION VERSION.old >VERSION.diff
+          set -e
+          if [ -s "VERSION.diff" ]; then
+            echo "changed=true" >>"$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >>"$GITHUB_OUTPUT"
+          fi
+      - name: Push changes an tag
+        if: ${{ !inputs.dry-run && steps.check.outputs.changed }}
+        run: |
+          git push
+          git push --tags
+      - name: Create release
+        if: ${{ steps.check.outputs.changed }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cog changelog --at "${{ steps.release.outputs.version }}" -t full_hash >notes.md || :
+          if [ '${{ inputs.dry-run }}' = 'true' ];then
+            gh release create "${{ steps.release.outputs.version }}" --draft --notes-file notes.md
+          else
+            gh release create "${{ steps.release.outputs.version }}" --notes-file notes.md
+          fi
+      - name: Generate summary
+        if: ${{ steps.check.outputs.changed }}
+        run: |
+          echo "### :rocket: Release ${{ steps.release.outputs.version }} launched!" >> $GITHUB_STEP_SUMMARY
+          echo "#### Changelog" >> $GITHUB_STEP_SUMMARY
+          cat notes.md >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY # this is a blank line
+      - name: No changes
+        if: ${{ !steps.check.outputs.changed }}
+        run: |
+          echo "## Nothing to do" >> "$GITHUB_STEP_SUMMARY"
+          echo "No new updates found" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY" # this is a blank lineuntu-latest

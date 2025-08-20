@@ -1,0 +1,220 @@
+name: Publish artifacts
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: |
+          Skip publishing binaries, signatures and attestations.
+        required: false
+        type: boolean
+        default: true
+      version:
+        description: |
+          Version to be used for testing purposes. If you need a proper hotfix use
+          the release.yml workflow instead. E.g.: v0.1.0-alpha.1
+        required: true
+        type: string
+
+permissions: {}
+
+jobs:
+  prepare:
+    name: Prepare metadata
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.load.outputs.version }}
+      flags: ${{ steps.load.outputs.flags }}
+    steps:
+      - uses: actions/checkout@8410ad0602e1e429cee44a835ae9f77f654a6694 # v4.0.0
+      - name: Load environment
+        id: load
+        run: |
+          VERSION="${{ inputs.version }}"
+          if [ -z "${VERSION}" ];then
+            VERSION="${{ github.ref_name }}"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          DRY_RUN="${{ inputs.dry-run }}"
+          if [ -z "${DRY_RUN}" ];then
+            DRY_RUN="false"
+          fi
+          echo "dry-run=${DRY_RUN}" >> $GITHUB_OUTPUT
+          GIT_HASH="$(git rev-parse HEAD)"
+          GIT_HASH_SHORT="$(git show -s --format=%h "${GIT_HASH}")"
+          BUILD_DATE="$(git show -s --format='%cI' "${GIT_HASH}")"
+          GIT_TREE_STATE="dirty"
+          if [ -z "$(git status --porcelain)" ]; then
+            GIT_TREE_STATE="clean"
+          fi
+          LD_FLAGS="-s -w \
+            -X main.Version=${VERSION} \
+            -X main.GitHash=${GIT_HASH} \
+            -X main.BuildDate=${BUILD_DATE} \
+            -X main.GitTreeState=${GIT_TREE_STATE}"
+          echo "flags=${LD_FLAGS}" >> "$GITHUB_OUTPUT"
+          echo "Flags: ${LD_FLAGS}"
+  executables:
+    name: Create executables
+    needs: [prepare]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        goos: [linux, darwin]
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@8410ad0602e1e429cee44a835ae9f77f654a6694 # v4.0.0
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version: stable
+      - name: Download dependencies
+        run: go mod download
+      - name: Build snapshot
+        id: build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          ARTIFACT_NAME="mono_${VERSION}_${GOOS}_${GOARCH}"
+          echo "artifact=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
+          echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >> "$GITHUB_ENV"
+          echo "Building artifact: ${ARTIFACT_NAME}"
+          go build -v \
+            -ldflags "${{ needs.prepare.outputs.flags }}" \
+            -o "./.dist/${ARTIFACT_NAME}" \
+            .
+      - name: Compress executable
+        uses: crazy-max/ghaction-upx@db8cc9515a4a7ea1b312cb82fbeae6d716daf777 # v3.2.0
+        with:
+          files: |
+            ./.dist/mono_*
+          args: -fq --best --lzma --force-macos
+      - name: Generate SBOM
+        uses: anchore/sbom-action@7b36ad622f042cab6f59a75c2ac24ccb256e9b45 # v0.20.4
+        with:
+          file: go.mod
+          artifact-name: ${{ env.ARTIFACT_NAME }}.sbom.spdx.json
+          output-file: ./.dist/${{ env.ARTIFACT_NAME }}.sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Pack executable and SBOM
+        run: |
+          tar -zcf "./${ARTIFACT_NAME}.tar.gz" "./.dist/${ARTIFACT_NAME}"
+          tar -zcf "./${ARTIFACT_NAME}.sbom.tar.gz" "./.dist/${ARTIFACT_NAME}.sbom.spdx.json"
+      - name: Upload artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ steps.build.outputs.artifact }}
+          path: |
+            ./${{ steps.build.outputs.artifact }}.tar.gz
+            ./${{ steps.build.outputs.artifact }}.sbom.tar.gz
+          if-no-files-found: error
+  checksums:
+    name: Checksum all
+    runs-on: ubuntu-latest
+    needs: [prepare, executables]
+    permissions:
+      actions: read # for detecting the Github Actions environment
+      id-token: write # Needed for signing blob signing and ID
+    outputs:
+      filename: ${{ steps.checksum.outputs.filename }}
+      hashes: ${{ steps.hash.outputs.hashes }}
+    env:
+      FILENAME: "mono_${{ needs.prepare.outputs.version }}_checksums.txt"
+      SIGN_FILENAME: "mono_${{ needs.prepare.outputs.version }}_checksums.sig"
+      CERT_FILENAME: "mono_${{ needs.prepare.outputs.version }}_checksums.pem"
+    steps:
+      - name: Install cosign
+        uses: sigstore/cosign-installer@d58896d6a1865668819e1d91763c7751a165e159 # v3.9.2
+      - name: Download all executables and SBOMs
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          path: .
+          merge-multiple: true
+      - name: Perform check on mono_*
+        id: checksum
+        run: |
+          find mono_* \
+            -type f -print0 | xargs -0 sha256sum >"${FILENAME}"
+      - name: Generate checksum file hash
+        id: hash
+        run: |
+          # sha256sum generates sha256 hash.
+          # base64 -w0 encodes to base64 and outputs on a single line.
+          echo "hashes=$(sha256sum ${FILENAME} | base64 -w0)" >> "$GITHUB_OUTPUT"
+      - name: Upload checksums
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ env.FILENAME }}
+          path: ${{ env.FILENAME }}
+          if-no-files-found: error
+      - name: Sign checksums
+        if: ${{ !needs.prepare.outputs.dry-run }}
+        id: sign
+        run: |
+          cosign sign-blob \
+          "${FILENAME}" \
+          --bundle cosign.bundle \
+          --output-certificate="${CERT_FILENAME}" \
+          --output-signature="${SIGN_FILENAME}" \
+          --yes
+          echo "Payload:"
+          cat "${FILENAME}"
+          echo "Signature:"
+          cat "${SIGN_FILENAME}"
+          echo "Certificate:"
+          cat "${CERT_FILENAME}"
+      - name: Verify signature
+        run: |
+          cosign verify-blob "${FILENAME}" \
+            --bundle cosign.bundle \
+            --certificate-identity=${{ github.server_url }}/${{ github.workflow_ref }} \
+            --certificate-oidc-issuer=https://token.actions.githubusercontent.com
+      - name: Upload signature and certificate
+        if: ${{ !needs.prepare.outputs.dry-run }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ env.FILENAME }}-cosign
+          path: |
+            ${{ env.SIGN_FILENAME }}
+            ${{ env.CERT_FILENAME }}
+          if-no-files-found: error
+  provenance:
+    name: Create checksums provenance
+    needs: [checksums]
+    if: ${{ !needs.prepare.outputs.dry-run }}
+    permissions:
+      actions: read # for detecting the Github Actions environment
+      id-token: write # Needed for provenance signing and ID
+      contents: write #  Needed for release uploads
+    # Must be refernced by a tag. https://github.com/slsa-framework/slsa-github-generator/blob/main/internal/builders/container/README.md#referencing-the-slsa-generator
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v2.1.0
+    with:
+      base64-subjects: "${{ needs.checksums.outputs.hashes }}"
+      provenance-name: "mono_${{ github.ref_name }}.intoto.jsonl"
+      upload-tag-name: ${{ github.ref_name }}
+      upload-assets: true
+  summary:
+    name: Summary
+    runs-on: ubuntu-latest
+    needs: [checksums, provenance]
+    permissions:
+      contents: write #  Needed for release uploads
+    steps:
+      - uses: actions/checkout@8410ad0602e1e429cee44a835ae9f77f654a6694 # v4.0.0
+      - name: Download all artifacts
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+      - name: Upload artifact to release
+        if: ${{ !needs.prepare.outputs.dry-run }}
+        id: upload
+        run: gh release upload ${{ github.ref_name }} "mono_*"
+      - name: Generate summary
+        run: |
+          echo "### :rocket: Release ${{ github.ref_name }} published!" >> $GITHUB_STEP_SUMMARY
+          echo "#### Artifacts" >> $GITHUB_STEP_SUMMARY
+          ls -lah >> $GITHUB_STEP_SUMMARY
