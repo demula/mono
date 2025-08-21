@@ -212,6 +212,8 @@ jobs:
       - name: Upload artifact to release
         if: ${{ !needs.prepare.outputs.dry-run }}
         id: upload
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: gh release upload ${{ github.ref_name }} "mono_*"
       - name: Generate summary
         run: |
