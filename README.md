@@ -44,9 +44,10 @@ to become a simplified version of
 [goreleaser](https://github.com/goreleaser/goreleaser) without being
 incompatible with existing users.
 
-> [!IMPORTANT] Do not run this command while running any other go command. It
-> does not lock the files used and it is meant to only be run after all
-> modifications (go mod tidy and others) are done.
+> [!Important]
+> Do not run this command while running any other go command. It does not lock
+> the files used and it is meant to only be run after all modifications (go mod
+> tidy and others) are done.
 
 ### Example
 
@@ -63,9 +64,9 @@ make example-release # Creates a new RC version that can be committed and tagged
 That repository shows how to use the `mono` command to prepare for a release.
 `mono` at the moment does not commit or tag the repository for you.
 
-> [!NOTE] Do not go too crazy creating tags and asking `go` to download them. The
-> Go package repository does **NOT** delete anything (even if you repo is
-> private).
+> [!Note]
+> Do not go too crazy creating tags and asking `go` to download them. The Go
+> package repository does **NOT** delete anything (even if you repo is private).
 
 ## Pricing
 
@@ -117,8 +118,9 @@ This tool is for the later.
 On this approach you need to carefully modify and update the `go.mod`s and the
 `go.sum`s in the same commit so it can be tagged all at once.
 
-> [!NOTE] The interdependencies should have already pre-aligned with
-> `go work sync` to avoid surprises.
+> [!Note]
+> The interdependencies should have already pre-aligned with `go work sync` to
+> avoid surprises.
 
 First step is to set `core` module dependency to `api` to the new version
 `@x.y.z` in its `go.mod` this changes its hash so we need to recalculate it for
