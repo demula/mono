@@ -301,13 +301,19 @@ func hash1(files []string, open func(string) (io.ReadCloser, error)) (string, er
 		}
 		hf := sha256.New()
 		_, err = io.Copy(hf, r)
-		r.Close()
+		_ = r.Close()
 		if err != nil {
 			return "", err
 		}
 		hh := hf.Sum(nil)
-		fmt.Fprintf(h, "%x  %s\n", hh, file)
-		fmt.Fprintf(sb, "%x  %s\n", hh, file)
+		_, err = fmt.Fprintf(h, "%x  %s\n", hh, file)
+		if err != nil {
+			return "", err
+		}
+		_, err = fmt.Fprintf(sb, "%x  %s\n", hh, file)
+		if err != nil {
+			return "", err
+		}
 	}
 	ph := h.Sum(nil)
 	h1 := "h1:" + base64.StdEncoding.EncodeToString(ph)

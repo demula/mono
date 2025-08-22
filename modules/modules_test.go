@@ -43,7 +43,10 @@ func TestDirHash(t *testing.T) {
 			name = "without "
 		}
 		t.Run(name+"license/"+tt.version, func(t *testing.T) {
-			os.Chdir("../testdata/")
+			err := os.Chdir("../testdata/")
+			if err != nil {
+				t.Fatal(err)
+			}
 			prefix := "./golden/"
 			license := ""
 			if tt.license {

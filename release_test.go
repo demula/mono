@@ -82,7 +82,6 @@ func TestRelease(t *testing.T) {
 
 func TestReleaseWithDryRun(t *testing.T) {
 	t.Parallel()
-	const golden = "./testdata/golden/"
 	const goldenVersion = "v1.0.0-rc.1"
 
 	tests := []struct {
