@@ -1,0 +1,4 @@
+github.com/demula/mono-example/api v0.1.0-alpha.3 h1:pCqCciz65SYm9OAahIWOm2vKmoLPlsqe7iQfpMT7+XQ=
+github.com/demula/mono-example/api v0.1.0-alpha.3/go.mod h1:D5a3K3mt3F4Pl63UfTUNn+mGZzzT4OpD0xi2bhJCeqU=
+github.com/demula/mono-example/core v0.1.0-alpha.3 h1:Ahb9cJlzt9xwUelLP0yVTBe7xsadbNmWHnzxnIXajVs=
+github.com/demula/mono-example/core v0.1.0-alpha.3/go.mod h1:QTWVK0fCEvGiBX6kQu1Jk9GuTvrH9g4BzqPfxj6VviI=

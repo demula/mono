@@ -3,6 +3,8 @@ package modules
 import (
 	"bytes"
 	"cmp"
+	"crypto/sha256"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -24,6 +26,7 @@ type Module struct {
 	FileName    string
 	GoModHash   string
 	DirHash     string
+	License     string
 	File        *modfile.File
 	Deps        []*Module
 	DepsVersion []string
@@ -45,7 +48,18 @@ func All(prefix string) ([]*Module, error) {
 		return nil, err
 	}
 	var ms []*Module
+	hasLicense := false
 	for _, f := range dfs {
+		m := &Module{
+			Prefix:   prefix,
+			FileName: f.Name(),
+			Sums:     make(map[module.Version][]string),
+		}
+		if f.Name() == "LICENSE" {
+			slog.Debug("license found")
+			hasLicense = true
+			continue
+		}
 		if !f.IsDir() || strings.HasPrefix(f.Name(), ".") {
 			continue
 		}
@@ -56,11 +70,6 @@ func All(prefix string) ([]*Module, error) {
 				continue
 			}
 			return nil, err
-		}
-		m := &Module{
-			Prefix:   prefix,
-			FileName: f.Name(),
-			Sums:     make(map[module.Version][]string),
 		}
 		contents, err := os.ReadFile(gomod)
 		if err != nil {
@@ -79,6 +88,11 @@ func All(prefix string) ([]*Module, error) {
 		debug(m, "found monorepo module at %s",
 			filepath.Join(prefix, f.Name()),
 		)
+	}
+	if hasLicense {
+		for _, m := range ms {
+			m.License = filepath.Join(prefix, "LICENSE")
+		}
 	}
 	return ms, nil
 }
@@ -145,9 +159,11 @@ func UpdateGoSum(m *Module, dry bool) error {
 	data := gosum.Format(m.Sums)
 	if !dry {
 		debug(m, "writing file %s", path)
-		err := os.WriteFile(path, data, 0644)
-		if err != nil {
-			return err
+		if len(data) > 0 { // skip writing empty go.sum
+			err := os.WriteFile(path, data, 0644)
+			if err != nil {
+				return err
+			}
 		}
 	} else {
 		debug(m, "[skipped] writing file %s", path)
@@ -237,14 +253,66 @@ func GoModHash(data []byte) (string, error) {
 // DirHash reads directory and produces its H1 hash.
 // Note: remember to modify the go.mod file first before running this function.
 func DirHash(m *Module) (string, error) {
-	return dirhash.HashDir(
-		filepath.Join(m.Prefix, m.FileName),
-		m.Path()+"@"+m.Version(),
-		dirhash.DefaultHash,
+	dir := filepath.Join(m.Prefix, m.FileName)
+	prefix := m.Path() + "@" + m.Version()
+	slog.Debug("hashing module \""+m.FileName+"\"",
+		slog.String("dir", dir),
+		slog.String("prefix", prefix),
 	)
+	files, err := dirhash.DirFiles(dir, prefix)
+	if err != nil {
+		return "", err
+	}
+	if len(m.License) > 0 {
+		licenseModulePath := filepath.Join(prefix, "LICENSE")
+		files = append(files, filepath.ToSlash(licenseModulePath))
+	}
+	for _, f := range files {
+		slog.Debug("... " + f)
+	}
+	osOpen := func(name string) (io.ReadCloser, error) {
+		f := strings.TrimPrefix(name, prefix)
+		if f == "/LICENSE" && len(m.License) > 0 {
+			return os.Open(m.License)
+		}
+		return os.Open(filepath.Join(dir, f))
+	}
+	return hash1(files, osOpen)
+	// return dirhash.HashDir(dir, prefix, dirhash.DefaultHash)
 }
 
 func debug(m *Module, format string, a ...any) {
 	msg := fmt.Sprintf(format, a...)
 	slog.Debug(msg, slog.String("module", m.Path()))
+}
+
+func hash1(files []string, open func(string) (io.ReadCloser, error)) (string, error) {
+	h := sha256.New()
+	files = append([]string(nil), files...)
+	sb := &bytes.Buffer{}
+	slices.Sort(files)
+	for _, file := range files {
+		if strings.Contains(file, "\n") {
+			return "", errors.New("dirhash: filenames with newlines are not supported")
+		}
+		r, err := open(file)
+		if err != nil {
+			return "", err
+		}
+		hf := sha256.New()
+		_, err = io.Copy(hf, r)
+		r.Close()
+		if err != nil {
+			return "", err
+		}
+		hh := hf.Sum(nil)
+		fmt.Fprintf(h, "%x  %s\n", hh, file)
+		fmt.Fprintf(sb, "%x  %s\n", hh, file)
+	}
+	ph := h.Sum(nil)
+	h1 := "h1:" + base64.StdEncoding.EncodeToString(ph)
+	slog.Debug("file:\n\n" + sb.String() + "\n")
+	slog.Debug("hashed "+h1,
+		slog.String("sha256", fmt.Sprintf("%x", ph)))
+	return h1, nil
 }

@@ -19,112 +19,153 @@ func TestRelease(t *testing.T) {
 		name     string
 		context  string
 		version  string
-		dryRun   bool
 		expected string
 		errMsg   string
 	}{
 		{
-			name:     "from a previous release",
-			context:  "./testdata/prev-release/",
-			version:  goldenVersion,
-			dryRun:   false,
-			expected: golden,
+			name:    "from a previous release",
+			context: "./testdata/prev-release/",
 		},
 		{
-			name:     "from development",
-			context:  "./testdata/dev-commits/",
-			version:  goldenVersion,
-			dryRun:   false,
-			expected: golden,
-		},
-		{
-			name:     "from development with dry-run",
-			context:  "./testdata/dev-commits/",
-			version:  goldenVersion,
-			dryRun:   true,
-			expected: "./testdata/dev-commits/",
+			name:    "from development",
+			context: "./testdata/dev-commits/",
 		},
 		{
 			name:    "invalid version",
 			context: "./testdata/dev-commits/",
 			version: "not#valid",
-			dryRun:  false,
 			errMsg:  "failed to update modules to new version: invalid version \"not#valid\"",
 		},
 		{
 			name:    "no modules found",
 			context: "./testdata/empty/",
-			version: goldenVersion,
-			dryRun:  false,
 			errMsg:  "no modules found",
 		},
 		{
 			name:    "wrong interdependencies",
 			context: "./testdata/wrong-interdeps/",
-			version: goldenVersion,
-			dryRun:  false,
 			errMsg:  "failed to calculate monorepo interdependencies: max iteration for sorting by direct dependencies reached",
 		},
-
 		{
 			name:    "corrupt cli go.mod",
 			context: "./testdata/corrupt-gomod/",
-			version: goldenVersion,
-			dryRun:  false,
 			errMsg:  "failed to fetch monorepo modules",
 		},
 		{
 			name:    "inconsistent cli go.sum",
 			context: "./testdata/inconsistent-gosum/",
-			version: goldenVersion,
-			dryRun:  false,
 			errMsg:  "go.sum: inconsistent dependencies",
 		},
 		{
 			name:    "missing cli go.sum",
 			context: "./testdata/missing-gosum/",
-			version: goldenVersion,
-			dryRun:  false,
 			errMsg:  "go.sum: inconsistent dependencies",
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+		if tt.expected == "" {
+			tt.expected = golden
+		}
+		if tt.version == "" {
+			tt.version = goldenVersion
+		}
+		t.Run(tt.name, testAgainstGoldenTemplate(
+			tt.context,
+			tt.version,
+			false,
+			tt.expected,
+			tt.errMsg,
+		))
+	}
+}
 
-			actualPath := t.TempDir()
-			tmpfs := os.DirFS(tt.context)
-			err := os.CopyFS(actualPath, tmpfs)
-			if err != nil {
-				t.Fatal(err)
-			}
+func TestReleaseWithDryRun(t *testing.T) {
+	t.Parallel()
+	const golden = "./testdata/golden/"
+	const goldenVersion = "v1.0.0-rc.1"
 
-			err = release(actualPath, tt.version, tt.dryRun)
-			if tt.errMsg != "" {
-				if err == nil {
-					t.Fatalf("expected error %q", tt.errMsg)
-				}
-				if !strings.Contains(err.Error(), tt.errMsg) {
-					t.Fatalf("error %q does not match expected error %q", err, tt.errMsg)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("unexpected error %q", err)
-			}
+	tests := []struct {
+		name    string
+		context string
+	}{
+		{
+			name:    "from a previous release",
+			context: "./testdata/prev-release/",
+		},
+		{
+			name:    "from development with dry-run",
+			context: "./testdata/dev-commits/",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, testAgainstGoldenTemplate(
+			tt.context,
+			goldenVersion,
+			true,
+			tt.context,
+			"",
+		))
+	}
+}
 
-			expectedPath := tt.expected
-			if tt.context == tt.expected {
-				expectedPath = actualPath
-			}
+func TestReleaseWithLicense(t *testing.T) {
+	t.Parallel()
+	const golden = "./testdata/golden-license/"
+	const goldenVersion = "v0.1.0-alpha.3"
 
-			if tt.expected == "" {
-				expectedPath = golden
-			}
+	tests := []struct {
+		name    string
+		context string
+	}{
+		{
+			name:    "from a previous release",
+			context: "./testdata/prev-release-license/",
+		},
+	}
 
-			assertAgainstGoldenTemplate(t, actualPath, expectedPath)
-		})
+	for _, tt := range tests {
+		t.Run(tt.name, testAgainstGoldenTemplate(
+			tt.context,
+			goldenVersion,
+			false,
+			golden,
+			"",
+		))
+	}
+}
+
+func testAgainstGoldenTemplate(context, version string, isDryRun bool, golden, errMsg string) func(*testing.T) {
+	return func(t *testing.T) {
+		t.Parallel()
+
+		actualPath := t.TempDir()
+		tmpfs := os.DirFS(context)
+		err := os.CopyFS(actualPath, tmpfs)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = release(actualPath, version, isDryRun)
+		if errMsg != "" {
+			if err == nil {
+				t.Fatalf("expected error %q", errMsg)
+			}
+			if !strings.Contains(err.Error(), errMsg) {
+				t.Fatalf("error %q does not match expected error %q", err, errMsg)
+			}
+			return
+		}
+		if err != nil {
+			t.Fatalf("unexpected error %q", err)
+		}
+
+		expectedPath := golden
+		if context == golden {
+			expectedPath = actualPath
+		}
+
+		assertAgainstGoldenTemplate(t, actualPath, expectedPath)
 	}
 }
 
@@ -205,7 +246,7 @@ func assertEqualFile(t *testing.T, expected, actual *os.File) {
 	expectedLines, err := readLines(expected)
 	if err != nil {
 		t.Errorf("could not read lines from  %q. error : %s",
-			expected.Name(), err.Error(),
+			actual.Name(), err.Error(),
 		)
 		return
 	}
@@ -217,8 +258,8 @@ func assertEqualFile(t *testing.T, expected, actual *os.File) {
 		return
 	}
 	if len(actualLines) != len(expectedLines) {
-		t.Errorf("expected %q content size %d does not match %d.\nexpected:\n%s\ngot:\n%s\n",
-			expected.Name(),
+		t.Errorf("%q content size %d does not match %d.\nexpected:\n%s\ngot:\n%s\n",
+			actual.Name(),
 			len(expectedLines),
 			len(actualLines),
 			printLines(expectedLines, -1),
@@ -228,8 +269,8 @@ func assertEqualFile(t *testing.T, expected, actual *os.File) {
 	}
 	for i := range expectedLines {
 		if actualLines[i] != expectedLines[i] {
-			t.Errorf("expected %q content differs on line %d.\nexpected:\n%s\ngot:\n%s\n",
-				expected.Name(),
+			t.Errorf("%q content differs on line %d.\nexpected:\n%s\ngot:\n%s\n",
+				actual.Name(),
 				i,
 				printLines(expectedLines, i),
 				printLines(actualLines, i),
