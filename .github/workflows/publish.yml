@@ -197,8 +197,7 @@ jobs:
     with:
       base64-subjects: "${{ needs.checksums.outputs.hashes }}"
       provenance-name: "mono_${{ github.ref_name }}.intoto.jsonl"
-      upload-tag-name: ${{ github.ref_name }}
-      upload-assets: true
+      upload-assets: false
   summary:
     name: Summary
     runs-on: ubuntu-latest
@@ -209,6 +208,9 @@ jobs:
       - uses: actions/checkout@8410ad0602e1e429cee44a835ae9f77f654a6694 # v4.0.0
       - name: Download all artifacts
         uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          path: .
+          merge-multiple: true
       - name: Upload artifact to release
         if: ${{ !needs.prepare.outputs.dry-run }}
         id: upload
