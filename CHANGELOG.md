@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - - -
+## [v0.1.1](https://github.com/demula/mono/compare/05e283f73a366ae26dda66e18d3ed90acee9a006..v0.1.1) - 2025-08-25
+#### Fixed
+- Missing virtual LICENSE file for submodules prevented proper folder checksum - ([fc5113a](https://github.com/demula/mono/commit/fc5113afffcce9846ad6c3695c6d0a64514d2306)) - demula
+
+- - -
+
 ## [v0.1.0](https://github.com/demula/mono/compare/13b5ed7295153fbae09dbd27ba4fd2ac4e8466ce..v0.1.0) - 2025-08-21
 #### Added
 - Add version flag to provide build information - ([bae896f](https://github.com/demula/mono/commit/bae896f09834eea7547cd587f61f9490732e6942)) - demula
